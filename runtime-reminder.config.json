@@ -1,0 +1,34 @@
+{
+  "enabledHooks": [
+    "tui.prompt.append",
+    "tool.execute.after"
+  ],
+  "messagesByHook": {
+    "tui.prompt.append": [
+      "[Runtime Reminder]",
+      "Use the question tool for user-facing questions and follow-up prompts.",
+      "Do not ask user-facing questions in plain text.",
+      "Do not end the conversation without a question-tool follow-up unless the user explicitly asks to end.",
+      "If you are about to close with text like done/finished/anything else, call the question tool instead.",
+      "Before making code changes, explain your plan and ask for user feedback via the question tool.",
+      "Do not edit code until the user explicitly approves."
+    ]
+  },
+  "targets": [
+    "prompt",
+    "text",
+    "messages"
+  ],
+  "toolAfterTrigger": {
+    "enabled": true,
+    "tools": [
+      "question"
+    ],
+    "message": [
+      "[Post-Question Reminder]",
+      "You just used the question tool.",
+      "Continue with question-tool-based follow-ups when applicable.",
+      "Do not end this interaction in plain text without another appropriate question-tool follow-up unless the user explicitly asks to stop."
+    ]
+  }
+}
