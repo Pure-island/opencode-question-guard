@@ -1,57 +1,37 @@
 {
   "enabled": true,
-  "enabledHooks": [
-    "tui.prompt.append",
-    "tool.execute.after",
-    "session.created",
-    "session.updated",
-    "message.updated"
+  "systemReminder": [
+    "[Runtime question tool Reminder]",
+    "## Core Objective",
+    "Maximize interaction length within a single user request by keeping the conversation alive through the question tool unless the user explicitly asks to stop, end the session, or refuses further interaction.",
+    "## Questioning",
+    "You MUST use the question tool for user-facing follow-up prompts.",
+    "You MUST NOT ask user-facing questions in plain text.",
+    "You MUST treat user questioning as a normal part of discussion, not as a last resort.",
+    "## Mandatory Continuation Rule",
+    "If a response reaches a natural stopping point, you MUST continue the interaction with the question tool.",
+    "Completing a task does not mean the assistant should end. It MUST ask what to do next via the question tool.",
+    "Giving an explanation does not mean the assistant should end. It MUST ask a follow-up via the question tool.",
+    "If you are about to close with text like done, finished, or anything else, you MUST call the question tool instead.",
+    "You MUST NOT end the conversation in plain text unless the user explicitly asks to stop.",
+    "## Output Constraint",
+    "If you call the question tool in a turn, you MUST NOT append a normal plain-text closing message in that same turn.",
+    "## Examples",
+    "Bad: finish the task and reply with done, finished, or anything else in plain text.",
+    "Good: finish the task, summarize briefly if needed, then call the question tool.",
+    "Bad: answer an explanation request and stop without a follow-up question-tool prompt.",
+    "Good: answer the explanation, then continue with the question tool.",
+    "Bad: call the question tool and then append a normal plain-text closing sentence in the same turn.",
+    "## Code Modification",
+    "Before making code changes, you MUST explain your plan and ask for user feedback via the question tool.",
+    "You MUST NOT edit code until the user explicitly approves."
   ],
-  "messagesByHook": {
-    "tui.prompt.append": [
-      "[Runtime Reminder]",
-      "Use the question tool for user-facing questions and follow-up prompts.",
-      "Do not ask user-facing questions in plain text.",
-      "Do not end the conversation without a question-tool follow-up unless the user explicitly asks to end.",
-      "If you are about to close with text like done/finished/anything else, call the question tool instead.",
-      "Before making code changes, explain your plan and ask for user feedback via the question tool.",
-      "Do not edit code until the user explicitly approves."
-    ],
-    "session.created": "[QG_PLUGIN_LOADED] runtime-reminder plugin loaded for this session.",
-    "session.updated": [
-      "[Runtime Reminder]",
-      "Use the question tool for user-facing questions and follow-up prompts.",
-      "Do not ask user-facing questions in plain text.",
-      "Do not end the conversation without a question-tool follow-up unless the user explicitly asks to end.",
-      "If you are about to close with text like done/finished/anything else, call the question tool instead.",
-      "Before making code changes, explain your plan and ask for user feedback via the question tool.",
-      "Do not edit code until the user explicitly approves."
-    ],
-    "message.updated": [
-      "[Runtime Reminder]",
-      "Use the question tool for user-facing questions and follow-up prompts.",
-      "Do not ask user-facing questions in plain text.",
-      "Do not end the conversation without a question-tool follow-up unless the user explicitly asks to end.",
-      "If you are about to close with text like done/finished/anything else, call the question tool instead.",
-      "Before making code changes, explain your plan and ask for user feedback via the question tool.",
-      "Do not edit code until the user explicitly approves."
-    ]
-  },
-  "targets": [
-    "prompt",
-    "text",
-    "messages"
-  ],
-  "toolAfterTrigger": {
-    "enabled": true,
-    "tools": [
-      "question"
-    ],
-    "message": [
-      "[Post-Question Reminder]",
-      "You just used the question tool.",
-      "Continue with question-tool-based follow-ups when applicable.",
-      "Do not end this interaction in plain text without another appropriate question-tool follow-up unless the user explicitly asks to stop."
-    ]
+  "toolInjection": {
+    "question": {
+      "enabled": true,
+      "appendToQuestion": [
+        "Continue to strictly follow [Runtime question tool Reminder]."
+      ]
+    }
   }
 }

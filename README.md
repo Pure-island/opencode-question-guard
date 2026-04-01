@@ -1,38 +1,51 @@
 # Runtime Reminder Plugin
 
-Runtime injection plugin for OpenCode. It appends configurable reminder text during interaction, with a primary focus on encouraging `question` tool usage for user-facing follow-ups.
+Runtime reminder plugin for OpenCode. It modifies model context in two immediate places:
+
+- Before each model request, it injects a configurable system reminder.
+- Before the `question` tool runs, it appends configurable text to every `output.args.questions[].question` entry.
 
 ## Files
 
 - `plugin.ts`: plugin implementation.
 - `runtime-reminder.config.json`: active config used by the plugin.
-- `runtime-reminder.config.all-hooks.example.json`: full-coverage sample config for all documented hooks/events.
+- `runtime-reminder.config.all-hooks.example.json`: legacy compatibility example from earlier experiments.
 - `README.zh-CN.md`: Chinese usage guide.
 
-## How It Works
+## Behavior
 
-This plugin uses a queue-based injection model:
+### 1. System reminder injection
 
-1. It loads `runtime-reminder.config.json` from the same directory as `plugin.ts`.
-2. It listens for runtime events via `event` hook.
-3. If an event type is in `enabledHooks`, it enqueues `messagesByHook[eventType]`.
-4. It listens to `tool.execute.after` and can enqueue extra reminder text when the tool matches `toolAfterTrigger.tools`.
-5. On `tui.prompt.append`, it injects:
-   - the base reminder (`messagesByHook["tui.prompt.append"]`) if enabled
-   - all queued messages accumulated from previous hook triggers
-6. Injection target is selected by `targets` priority (`prompt` -> `text` -> `messages`).
+The plugin uses `experimental.chat.system.transform`.
 
-## Configuration Reference
+On every request sent to the model, it appends `systemReminder` to `output.system`.
+
+This is the hidden, model-facing reminder path.
+
+### 2. Immediate question-tool mutation
+
+The plugin uses `tool.execute.before`.
+
+When the tool name is `question`, it mutates the current tool payload immediately:
+
+- it reads `output.args.questions`
+- for each item with a string `question`
+- it appends configured text to the end of that question
+- it skips appending if the question already ends with the configured text
+
+This is the visible, tool-payload mutation path.
+
+## Configuration
 
 All config lives in `runtime-reminder.config.json`.
 
 ### `enabled`
 
 - Type: `boolean`
-- Purpose: global runtime switch for this plugin.
+- Purpose: global runtime switch.
 - Behavior:
-  - `true` (default): plugin runs normally.
-  - `false`: plugin skips all injections and exits early for every hook.
+  - `true`: plugin is active.
+  - `false`: plugin skips both system injection and tool mutation.
 
 Example:
 
@@ -42,123 +55,94 @@ Example:
 }
 ```
 
-### `enabledHooks`
+### `systemReminder`
 
-- Type: `string[]`
-- Purpose: allowlist of hook/event names that are allowed to enqueue reminder text.
-- Notes:
-  - Include `tui.prompt.append` if you want base reminder injection each turn.
-  - Include `tool.execute.after` if you want tool-based reinforcement.
-
-Example:
-
-```json
-{
-  "enabledHooks": ["tui.prompt.append", "tool.execute.after", "message.updated"]
-}
-```
-
-### `messagesByHook`
-
-- Type: `Record<string, string | string[]>`
-- Purpose: map each hook/event name to injected reminder content.
+- Type: `string | string[]`
+- Purpose: content injected into `experimental.chat.system.transform`.
 - Behavior:
   - `string[]` is joined with newline.
-  - Empty or missing message is ignored.
+  - empty text is ignored.
 
-Example:
+Current example:
 
 ```json
 {
-  "messagesByHook": {
-    "tui.prompt.append": [
-      "[Runtime Reminder]",
-      "Use question tool for follow-ups."
-    ],
-    "message.updated": "A message changed; verify whether question follow-up is needed."
-  }
+  "systemReminder": [
+    "[Runtime question tool Reminder]",
+    "You MUST use the question tool for user-facing follow-up prompts.",
+    "You MUST NOT ask user-facing questions in plain text."
+  ]
 }
 ```
 
-### `targets`
+### `toolInjection.question.enabled`
 
-- Type: `Array<"prompt" | "text" | "messages">`
-- Purpose: output mutation priority.
+- Type: `boolean`
+- Purpose: enable or disable immediate mutation of the `question` tool payload.
+
+### `toolInjection.question.appendToQuestion`
+
+- Type: `string | string[]`
+- Purpose: text appended to every `output.args.questions[].question` when the `question` tool runs.
 - Behavior:
-  - Plugin tries each target in order.
-  - First usable target wins.
-  - If none matches, falls back to `output.prompt`.
+  - text is appended to the end of the existing question
+  - `string[]` is joined with newline
+  - if the current question already ends with that text, plugin does not append it again
 
-Example:
-
-```json
-{
-  "targets": ["prompt", "text", "messages"]
-}
-```
-
-### `toolAfterTrigger`
-
-- Type: object
-- Purpose: enqueue post-tool reminder from `tool.execute.after`.
-
-Fields:
-
-- `enabled` (`boolean`): turns this feature on/off.
-- `tools` (`string[]`): tool allowlist, for example `"question"`.
-- `message` (`string | string[]`): reminder text to enqueue when tool matches.
-
-Example:
+Current example:
 
 ```json
 {
-  "toolAfterTrigger": {
-    "enabled": true,
-    "tools": ["question"],
-    "message": [
-      "[Post-Question Reminder]",
-      "Keep using question tool for user-facing follow-ups."
-    ]
+  "toolInjection": {
+    "question": {
+      "enabled": true,
+      "appendToQuestion": [
+        "Continue to strictly follow [Runtime question tool Reminder]."
+      ]
+    }
   }
 }
 ```
 
-## Usage Patterns
+## Example Config
 
-### Pattern A: Minimal Question Guidance
-
-- Enable only `tui.prompt.append` and `tool.execute.after`.
-- Keep `toolAfterTrigger.tools` as `["question"]`.
-- Suitable for lightweight behavior steering.
-
-### Pattern B: Event-Driven Reinforcement
-
-- Add events like `message.updated`, `session.updated`, `permission.asked`.
-- Provide short, event-specific reminders in `messagesByHook`.
-- Suitable when you want context-sensitive reinforcement.
-
-### Pattern C: All-Hooks Lab Mode
-
-- Start from `runtime-reminder.config.all-hooks.example.json`.
-- Remove hooks/messages not needed for your environment.
-- Suitable for experimentation and tuning.
+```json
+{
+  "enabled": true,
+  "systemReminder": [
+    "[Runtime question tool Reminder]",
+    "## Core Objective",
+    "Maximize interaction length within a single user request by keeping the conversation alive through the question tool unless the user explicitly asks to stop, end the session, or refuses further interaction."
+  ],
+  "toolInjection": {
+    "question": {
+      "enabled": true,
+      "appendToQuestion": [
+        "Continue to strictly follow [Runtime question tool Reminder]."
+      ]
+    }
+  }
+}
+```
 
 ## Installation
 
 ### Global Installation
 
 1. Copy `plugin.ts` to `~/.config/opencode/plugins/runtime-reminder.ts`.
-2. Copy your chosen config to `~/.config/opencode/plugins/runtime-reminder.config.json`.
+2. Copy `runtime-reminder.config.json` to `~/.config/opencode/plugins/runtime-reminder.config.json`.
 3. Restart OpenCode.
 
 ### Project Installation
 
 1. Copy `plugin.ts` to `.opencode/plugins/runtime-reminder.ts`.
-2. Copy your chosen config to `.opencode/plugins/runtime-reminder.config.json`.
+2. Copy `runtime-reminder.config.json` to `.opencode/plugins/runtime-reminder.config.json`.
 3. Restart the session in that project.
 
 ## Notes
 
-- This folder is a template package and is not auto-installed.
-- If config loading fails, plugin falls back to built-in defaults.
-- Plugin scope is runtime prompt injection only; it does not change your codebase or permission model.
+- This plugin no longer depends on `tui.prompt.append`.
+- It no longer uses a queue shared across hooks.
+- The system reminder is injected every request.
+- The `question` tool mutation happens immediately before that tool executes.
+- The `question` mutation is de-duplicated with an `endsWith(...)` check.

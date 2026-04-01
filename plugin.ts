@@ -1,47 +1,47 @@
 import { readFile } from "node:fs/promises"
-import type { Plugin, Hooks } from "@opencode-ai/plugin"
-
-type OutputLike = {
-  prompt?: unknown
-  text?: unknown
-  messages?: unknown
-}
+import type { Hooks, Plugin } from "@opencode-ai/plugin"
 
 type RuntimeReminderConfig = {
   enabled?: boolean
-  enabledHooks?: string[]
-  messagesByHook?: Record<string, string | string[]>
-  targets?: Array<"prompt" | "text" | "messages">
-  toolAfterTrigger?: {
-    enabled?: boolean
-    tools?: string[]
-    message?: string | string[]
+  systemReminder?: string | string[]
+  toolInjection?: {
+    question?: {
+      enabled?: boolean
+      appendToQuestion?: string | string[]
+    }
   }
 }
 
+type SystemTransformOutput = {
+  system?: string[]
+}
+
+type QuestionItem = {
+  question?: unknown
+}
+
+type QuestionToolInput = {
+  questions?: QuestionItem[]
+}
+
+const DEFAULT_REMINDER = [
+  "[Runtime Reminder]",
+  "Use the question tool for user-facing questions and follow-up prompts.",
+  "Do not ask user-facing questions in plain text.",
+].join("\n")
+
 const DEFAULT_CONFIG: RuntimeReminderConfig = {
   enabled: true,
-  enabledHooks: ["tui.prompt.append", "tool.execute.after"],
-  messagesByHook: {
-    "tui.prompt.append": [
-      "[Runtime Reminder]",
-      "Use the question tool for user-facing questions and follow-up prompts.",
-      "Do not ask user-facing questions in plain text.",
-    ],
-  },
-  targets: ["prompt", "text", "messages"],
-  toolAfterTrigger: {
-    enabled: true,
-    tools: ["question"],
-    message: [
-      "[Post-Question Reminder]",
-      "You just used the question tool.",
-      "Continue with question-tool-based follow-ups when applicable.",
-    ],
+  systemReminder: DEFAULT_REMINDER,
+  toolInjection: {
+    question: {
+      enabled: true,
+      appendToQuestion: DEFAULT_REMINDER,
+    },
   },
 }
 
-const toText = (value: string | string[] | undefined): string => {
+const toText = (value: string | string[] | undefined) => {
   if (!value) return ""
   return Array.isArray(value) ? value.join("\n") : value
 }
@@ -51,43 +51,14 @@ const mergeConfig = (loaded: RuntimeReminderConfig | null): RuntimeReminderConfi
 
   return {
     enabled: loaded.enabled ?? DEFAULT_CONFIG.enabled,
-    enabledHooks: loaded.enabledHooks ?? DEFAULT_CONFIG.enabledHooks,
-    messagesByHook: {
-      ...(DEFAULT_CONFIG.messagesByHook ?? {}),
-      ...(loaded.messagesByHook ?? {}),
-    },
-    targets: loaded.targets ?? DEFAULT_CONFIG.targets,
-    toolAfterTrigger: {
-      ...(DEFAULT_CONFIG.toolAfterTrigger ?? {}),
-      ...(loaded.toolAfterTrigger ?? {}),
+    systemReminder: loaded.systemReminder ?? DEFAULT_CONFIG.systemReminder,
+    toolInjection: {
+      question: {
+        ...(DEFAULT_CONFIG.toolInjection?.question ?? {}),
+        ...(loaded.toolInjection?.question ?? {}),
+      },
     },
   }
-}
-
-const appendToOutput = (output: OutputLike, reminder: string, targets: Array<"prompt" | "text" | "messages">) => {
-  const suffix = `\n\n${reminder}`
-
-  for (const target of targets) {
-    if (target === "prompt" && typeof output.prompt === "string") {
-      output.prompt += suffix
-      return
-    }
-
-    if (target === "text" && typeof output.text === "string") {
-      output.text += suffix
-      return
-    }
-
-    if (target === "messages" && Array.isArray(output.messages)) {
-      ;(output.messages as Array<{ role: string; content: string }>).push({
-        role: "system",
-        content: reminder,
-      })
-      return
-    }
-  }
-
-  output.prompt = reminder
 }
 
 const loadConfig = async (): Promise<RuntimeReminderConfig> => {
@@ -104,57 +75,41 @@ const loadConfig = async (): Promise<RuntimeReminderConfig> => {
 export const RuntimeQuestionReminderPlugin: Plugin = async () => {
   const config = await loadConfig()
   const pluginEnabled = config.enabled !== false
-  const enabledHooks = new Set(config.enabledHooks ?? [])
-  const targets = config.targets ?? ["prompt", "text", "messages"]
-  const queue: string[] = []
-
-  const enqueue = (text: string | string[] | undefined) => {
-    const normalized = toText(text).trim()
-    if (!normalized) return
-    queue.push(normalized)
-  }
-
-  const basePromptReminder = toText(config.messagesByHook?.["tui.prompt.append"]).trim()
-  const triggerTools = new Set(config.toolAfterTrigger?.tools ?? [])
-  const postToolMessage = config.toolAfterTrigger?.message
-  const postToolEnabled = Boolean(config.toolAfterTrigger?.enabled)
+  const systemReminder = toText(config.systemReminder).trim()
+  const questionInjectionEnabled = config.toolInjection?.question?.enabled !== false
+  const questionAppendText = toText(config.toolInjection?.question?.appendToQuestion).trim()
 
   return {
-    event: async ({ event }: any) => {
+    "experimental.chat.system.transform": async (_input: unknown, output: SystemTransformOutput) => {
       if (!pluginEnabled) return
+      if (!systemReminder) return
 
-      const eventType = event?.type
-      if (!eventType) return
-
-      if (!enabledHooks.has(eventType)) return
-
-      const msg = config.messagesByHook?.[eventType]
-      enqueue(msg)
-    },
-
-    "tool.execute.after": async (input: any) => {
-      if (!pluginEnabled) return
-      if (!enabledHooks.has("tool.execute.after")) return
-      if (!postToolEnabled) return
-
-      const toolName = input?.tool
-      if (!toolName) return
-
-      if (triggerTools.size > 0 && !triggerTools.has(toolName)) return
-      enqueue(postToolMessage)
-    },
-
-    "tui.prompt.append": async (_input: any, output: OutputLike) => {
-      if (!pluginEnabled) return
-
-      if (enabledHooks.has("tui.prompt.append") && basePromptReminder) {
-        appendToOutput(output, basePromptReminder, targets)
+      if (!Array.isArray(output.system)) {
+        output.system = []
       }
 
-      if (queue.length === 0) return
+      output.system.push(systemReminder)
+    },
 
-      const batch = queue.splice(0, queue.length).join("\n\n")
-      appendToOutput(output, batch, targets)
+    "tool.execute.before": async (
+      input: { tool?: unknown },
+      output: { args?: { questions?: QuestionItem[] } },
+    ) => {
+      if (!pluginEnabled) return
+
+      const toolName = input?.tool
+      if (toolName !== "question") return
+      if (!questionInjectionEnabled) return
+      if (!questionAppendText) return
+
+      const questions = output?.args?.questions
+      if (!Array.isArray(questions)) return
+
+      for (const item of questions) {
+        if (typeof item?.question !== "string") continue
+        if (item.question.endsWith(questionAppendText)) continue
+        item.question = `${item.question}\n\n${questionAppendText}`
+      }
     },
   } as Hooks
 }
