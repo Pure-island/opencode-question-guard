@@ -26,6 +26,22 @@
 
 配置文件：`runtime-reminder.config.json`
 
+### `enabled`
+
+- 类型：`boolean`
+- 作用：插件总开关。
+- 行为：
+  - `true`（默认）：插件正常执行注入。
+  - `false`：插件在所有钩子中直接返回，不进行任何注入。
+
+示例：
+
+```json
+{
+  "enabled": false
+}
+```
+
 ### `enabledHooks`
 
 - 类型：`string[]`

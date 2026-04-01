@@ -1,10 +1,33 @@
 {
+  "enabled": true,
   "enabledHooks": [
     "tui.prompt.append",
-    "tool.execute.after"
+    "tool.execute.after",
+    "session.created",
+    "session.updated",
+    "message.updated"
   ],
   "messagesByHook": {
     "tui.prompt.append": [
+      "[Runtime Reminder]",
+      "Use the question tool for user-facing questions and follow-up prompts.",
+      "Do not ask user-facing questions in plain text.",
+      "Do not end the conversation without a question-tool follow-up unless the user explicitly asks to end.",
+      "If you are about to close with text like done/finished/anything else, call the question tool instead.",
+      "Before making code changes, explain your plan and ask for user feedback via the question tool.",
+      "Do not edit code until the user explicitly approves."
+    ],
+    "session.created": "[QG_PLUGIN_LOADED] runtime-reminder plugin loaded for this session.",
+    "session.updated": [
+      "[Runtime Reminder]",
+      "Use the question tool for user-facing questions and follow-up prompts.",
+      "Do not ask user-facing questions in plain text.",
+      "Do not end the conversation without a question-tool follow-up unless the user explicitly asks to end.",
+      "If you are about to close with text like done/finished/anything else, call the question tool instead.",
+      "Before making code changes, explain your plan and ask for user feedback via the question tool.",
+      "Do not edit code until the user explicitly approves."
+    ],
+    "message.updated": [
       "[Runtime Reminder]",
       "Use the question tool for user-facing questions and follow-up prompts.",
       "Do not ask user-facing questions in plain text.",

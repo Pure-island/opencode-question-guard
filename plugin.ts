@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises"
+import type { Plugin, Hooks } from "@opencode-ai/plugin"
 
 type OutputLike = {
   prompt?: unknown
@@ -7,6 +8,7 @@ type OutputLike = {
 }
 
 type RuntimeReminderConfig = {
+  enabled?: boolean
   enabledHooks?: string[]
   messagesByHook?: Record<string, string | string[]>
   targets?: Array<"prompt" | "text" | "messages">
@@ -18,6 +20,7 @@ type RuntimeReminderConfig = {
 }
 
 const DEFAULT_CONFIG: RuntimeReminderConfig = {
+  enabled: true,
   enabledHooks: ["tui.prompt.append", "tool.execute.after"],
   messagesByHook: {
     "tui.prompt.append": [
@@ -47,6 +50,7 @@ const mergeConfig = (loaded: RuntimeReminderConfig | null): RuntimeReminderConfi
   if (!loaded) return DEFAULT_CONFIG
 
   return {
+    enabled: loaded.enabled ?? DEFAULT_CONFIG.enabled,
     enabledHooks: loaded.enabledHooks ?? DEFAULT_CONFIG.enabledHooks,
     messagesByHook: {
       ...(DEFAULT_CONFIG.messagesByHook ?? {}),
@@ -97,8 +101,9 @@ const loadConfig = async (): Promise<RuntimeReminderConfig> => {
   }
 }
 
-export const RuntimeQuestionReminderPlugin = async () => {
+export const RuntimeQuestionReminderPlugin: Plugin = async () => {
   const config = await loadConfig()
+  const pluginEnabled = config.enabled !== false
   const enabledHooks = new Set(config.enabledHooks ?? [])
   const targets = config.targets ?? ["prompt", "text", "messages"]
   const queue: string[] = []
@@ -116,6 +121,8 @@ export const RuntimeQuestionReminderPlugin = async () => {
 
   return {
     event: async ({ event }: any) => {
+      if (!pluginEnabled) return
+
       const eventType = event?.type
       if (!eventType) return
 
@@ -126,6 +133,7 @@ export const RuntimeQuestionReminderPlugin = async () => {
     },
 
     "tool.execute.after": async (input: any) => {
+      if (!pluginEnabled) return
       if (!enabledHooks.has("tool.execute.after")) return
       if (!postToolEnabled) return
 
@@ -137,6 +145,8 @@ export const RuntimeQuestionReminderPlugin = async () => {
     },
 
     "tui.prompt.append": async (_input: any, output: OutputLike) => {
+      if (!pluginEnabled) return
+
       if (enabledHooks.has("tui.prompt.append") && basePromptReminder) {
         appendToOutput(output, basePromptReminder, targets)
       }
@@ -146,5 +156,7 @@ export const RuntimeQuestionReminderPlugin = async () => {
       const batch = queue.splice(0, queue.length).join("\n\n")
       appendToOutput(output, batch, targets)
     },
-  }
+  } as Hooks
 }
+
+export default RuntimeQuestionReminderPlugin

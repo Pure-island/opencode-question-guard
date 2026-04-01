@@ -26,6 +26,22 @@ This plugin uses a queue-based injection model:
 
 All config lives in `runtime-reminder.config.json`.
 
+### `enabled`
+
+- Type: `boolean`
+- Purpose: global runtime switch for this plugin.
+- Behavior:
+  - `true` (default): plugin runs normally.
+  - `false`: plugin skips all injections and exits early for every hook.
+
+Example:
+
+```json
+{
+  "enabled": false
+}
+```
+
 ### `enabledHooks`
 
 - Type: `string[]`
