@@ -1,5 +1,8 @@
 {
   "enabled": true,
+  "disableForWorkspacePrefixes": [
+    "Auto"
+  ],
   "systemReminder": [
     "[Runtime question tool Reminder]",
     "## Core Objective",

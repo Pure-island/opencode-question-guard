@@ -55,6 +55,20 @@ Example:
 }
 ```
 
+### `disableForWorkspacePrefixes`
+
+- Type: `string[]`
+- Purpose: automatically disable the plugin when the current workspace name starts with one of these prefixes.
+- Default: `["Auto"]`
+
+Example:
+
+```json
+{
+  "disableForWorkspacePrefixes": ["Auto", "Tmp"]
+}
+```
+
 ### `systemReminder`
 
 - Type: `string | string[]`
@@ -146,3 +160,4 @@ Current example:
 - The system reminder is injected every request.
 - The `question` tool mutation happens immediately before that tool executes.
 - The `question` mutation is de-duplicated with an `endsWith(...)` check.
+- The plugin auto-disables when the workspace name starts with a configured prefix.

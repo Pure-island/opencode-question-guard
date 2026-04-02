@@ -55,6 +55,20 @@
 }
 ```
 
+### `disableForWorkspacePrefixes`
+
+- 类型：`string[]`
+- 作用：当当前 workspace 名称以前缀列表中的任意值开头时，自动禁用插件。
+- 默认：`["Auto"]`
+
+示例：
+
+```json
+{
+  "disableForWorkspacePrefixes": ["Auto", "Tmp"]
+}
+```
+
 ### `systemReminder`
 
 - 类型：`string | string[]`
@@ -146,3 +160,4 @@
 - `systemReminder` 会在每次请求前注入。
 - `question` 工具改写会在工具执行前立即发生。
 - `question` 改写通过 `endsWith(...)` 做末尾去重，避免重复叠加。
+- 当 workspace 名称以配置前缀开头时，插件会自动失效。

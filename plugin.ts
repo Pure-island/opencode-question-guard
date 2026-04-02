@@ -1,8 +1,10 @@
 import { readFile } from "node:fs/promises"
+import { basename } from "node:path"
 import type { Hooks, Plugin } from "@opencode-ai/plugin"
 
 type RuntimeReminderConfig = {
   enabled?: boolean
+  disableForWorkspacePrefixes?: string[]
   systemReminder?: string | string[]
   toolInjection?: {
     question?: {
@@ -32,6 +34,7 @@ const DEFAULT_REMINDER = [
 
 const DEFAULT_CONFIG: RuntimeReminderConfig = {
   enabled: true,
+  disableForWorkspacePrefixes: ["Auto"],
   systemReminder: DEFAULT_REMINDER,
   toolInjection: {
     question: {
@@ -46,11 +49,23 @@ const toText = (value: string | string[] | undefined) => {
   return Array.isArray(value) ? value.join("\n") : value
 }
 
+const pickWorkspacePath = (directory?: string, worktree?: string) => {
+  const candidates = [directory, worktree]
+    .filter((value): value is string => Boolean(value))
+    .map((value) => value.trim())
+    .filter((value) => value !== "/" && value !== "\\")
+
+  if (candidates.length === 0) return ""
+
+  return candidates.sort((a, b) => b.length - a.length)[0]
+}
+
 const mergeConfig = (loaded: RuntimeReminderConfig | null): RuntimeReminderConfig => {
   if (!loaded) return DEFAULT_CONFIG
 
   return {
     enabled: loaded.enabled ?? DEFAULT_CONFIG.enabled,
+    disableForWorkspacePrefixes: loaded.disableForWorkspacePrefixes ?? DEFAULT_CONFIG.disableForWorkspacePrefixes,
     systemReminder: loaded.systemReminder ?? DEFAULT_CONFIG.systemReminder,
     toolInjection: {
       question: {
@@ -72,9 +87,13 @@ const loadConfig = async (): Promise<RuntimeReminderConfig> => {
   }
 }
 
-export const RuntimeQuestionReminderPlugin: Plugin = async () => {
+export const RuntimeQuestionReminderPlugin: Plugin = async (pluginInput) => {
   const config = await loadConfig()
-  const pluginEnabled = config.enabled !== false
+  const workspacePath = pickWorkspacePath(pluginInput.directory, pluginInput.worktree)
+  const workspaceName = basename(workspacePath)
+  const disabledPrefixes = config.disableForWorkspacePrefixes ?? []
+  const disabledByWorkspace = disabledPrefixes.some((prefix) => workspaceName.startsWith(prefix))
+  const pluginEnabled = config.enabled !== false && !disabledByWorkspace
   const systemReminder = toText(config.systemReminder).trim()
   const questionInjectionEnabled = config.toolInjection?.question?.enabled !== false
   const questionAppendText = toText(config.toolInjection?.question?.appendToQuestion).trim()
